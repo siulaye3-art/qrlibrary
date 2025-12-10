@@ -158,6 +158,23 @@ video {
   padding: 0.3rem 0.6rem; /* smaller button */
 }
 
+/* Scanned books (for borrow) */
+#scannedList {
+  display: flex;
+  flex-wrap: wrap;       /* wrap long text into next line */
+  gap: 0.3rem;           /* spacing between chips */
+  font-size: 0.8rem;     /* smaller text */
+  line-height: 1.2;
+  max-width: 100%;       /* stay within container */
+  overflow-wrap: break-word; /* wrap long words */
+}
+
+#scannedList .chip {
+  font-size: 0.8rem;     /* smaller chip text */
+  padding: 0.2rem 0.4rem; /* smaller padding inside chip */
+  max-width: 100%;        /* ensure chip does not overflow container */
+  word-break: break-all;  /* break long book codes if needed */
+}
 
 
 </style>
@@ -740,5 +757,6 @@ borrowForm.addEventListener('submit', async (e) => {
   </script>
 </body>
 </html>
+
 
 
