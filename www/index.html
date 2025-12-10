@@ -91,6 +91,52 @@
     font-size: 0.85rem;  /* smaller text */
     padding: 0.4rem 0.6rem; /* smaller padding */
 }
+.video-wrap {
+  position: relative;
+  width: 300px;   /* reduced width */
+  height: 200px;  /* reduced height */
+  margin: auto;
+  overflow: hidden;
+  border: 2px solid #0a7d32;
+  border-radius: 12px;
+}
+video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;  /* keeps aspect ratio */
+  border-radius: 12px;
+}
+#scan-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: red;
+  animation: scanAnim 2s infinite alternate;
+  display: none;
+}
+.app-bar {
+  background: #0a7d32;
+  color: #fff;
+  padding: 0.5rem 1rem; /* smaller padding */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  font-size: 0.9rem; /* smaller text */
+}
+
+.app-bar h1 {
+  font-size: 1rem; /* smaller heading */
+  margin: 0;
+}
+
+.app-bar button {
+  font-size: 0.8rem; /* smaller button text */
+  padding: 0.3rem 0.6rem; /* smaller button */
+}
+
+
 
 </style>
 </head>
@@ -397,42 +443,55 @@
       overlay.textContent = 'Stopped';
     }
 
-    function scanFrame(){
-      if(!scanning) return;
-      if(video.readyState === video.HAVE_ENOUGH_DATA){
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video,0,0,canvas.width,canvas.height);
-        const idata = ctx.getImageData(0,0,canvas.width,canvas.height);
-        const code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'dontInvert' });
-        if(code && code.data){
-          beep.currentTime = 0; beep.play().catch(()=>{});
-          const scannedCode = String(code.data).trim();
-          overlay.textContent = 'Scanned: ' + scannedCode;
+   let lastScannedCode = null; // keep track of last scanned code
 
-          if(inReturnMode && returnRecord){
-            if(returnRecord.books.includes(scannedCode)) markReturnScanned(scannedCode);
-            else showToast('This item does not belong to ' + returnRecord.borrower.name);
+function scanFrame(){
+  if(!scanning) return;
+  if(video.readyState === video.HAVE_ENOUGH_DATA){
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const idata = ctx.getImageData(0,0,canvas.width,canvas.height);
+    const code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'dontInvert' });
+
+    if(code && code.data){
+      const scannedCode = String(code.data).trim();
+
+      // Only play sound if this code is new or different from the last one
+      if(scannedCode !== lastScannedCode){
+        beep.currentTime = 0;
+        beep.play().catch(()=>{});
+        lastScannedCode = scannedCode;
+      }
+
+      overlay.textContent = 'Scanned: ' + scannedCode;
+
+      if(inReturnMode && returnRecord){
+        if(returnRecord.books.includes(scannedCode)) markReturnScanned(scannedCode);
+        else showToast('This item does not belong to ' + returnRecord.borrower.name);
+      } else {
+        const found = serverRecords.find(r => Array.isArray(r.books) && r.books.includes(scannedCode));
+        if(found){
+          enterReturnMode(found);
+          markReturnScanned(scannedCode);
+        } else {
+          if(!scannedCodes.includes(scannedCode)){
+            scannedCodes.push(scannedCode);
+            localStorage.setItem('scannedCodes', JSON.stringify(scannedCodes));
+            renderScannedList();
+            showToast('Added: ' + scannedCode);
           } else {
-            const found = serverRecords.find(r => Array.isArray(r.books) && r.books.includes(scannedCode));
-            if(found){
-              enterReturnMode(found);
-              markReturnScanned(scannedCode);
-            } else {
-              if(!scannedCodes.includes(scannedCode)){
-                scannedCodes.push(scannedCode);
-                localStorage.setItem('scannedCodes', JSON.stringify(scannedCodes));
-                renderScannedList();
-                showToast('Added: ' + scannedCode);
-              } else {
-                showToast('Already scanned for borrow');
-              }
-            }
+            showToast('Already scanned for borrow');
           }
         }
       }
-      requestAnimationFrame(scanFrame);
+    } else {
+      lastScannedCode = null; // reset if no QR detected
     }
+  }
+  requestAnimationFrame(scanFrame);
+}
+
 
     borrowForm.addEventListener('submit', async (e) => {
     e.preventDefault();
