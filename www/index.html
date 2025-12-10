@@ -22,8 +22,23 @@
   .chip{display:inline-block;padding:.25rem .5rem;background:#eee;border-radius:6px;margin:.15rem}
   dialog{border:none;border-radius:12px;padding:1rem;width:90%;max-width:520px}
   .muted{color:#666}
-  #toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#0a7d32;color:#fff;padding:.7rem 1rem;border-radius:8px;opacity:0;transition:opacity .25s}
-  #toast.show{opacity:1}
+  #toast {
+  position: fixed;
+  top: 1rem;        /* move from bottom to top */
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0a7d32;
+  color: #fff;
+  padding: .7rem 1rem;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity .25s;
+  z-index: 9999;    /* ensure it appears above other elements */
+}
+#toast.show {
+  opacity: 1;
+}
+
   .return-panel{background:#fff;padding:.75rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-top:.6rem}
   .return-list{display:flex;flex-wrap:wrap;gap:.5rem}
   .progress-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:.5rem}
@@ -718,3 +733,4 @@ borrowForm.addEventListener('submit', async (e) => {
   </script>
 </body>
 </html>
+
