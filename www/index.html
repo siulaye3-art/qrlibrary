@@ -45,6 +45,7 @@
   .progress-dot.done{background:green}
   .progress-dot.todo{background:#ccc}
 /* Bottom nav bar */
+/* Bottom nav bar - hanging style */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -56,8 +57,14 @@
   justify-content: space-around;
   align-items: center;
   padding: 0.5rem 0;
-  box-shadow: 0 -2px 6px rgba(0,0,0,.1);
-  z-index: 1000;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.15); /* stronger shadow for hanging effect */
+  z-index: 10000; /* ensure it's above everything */
+  border-radius: 12px 12px 0 0; /* rounded top edges */
+}
+
+/* Add bottom padding to main content so it doesn't go under the nav */
+main {
+  padding-bottom: 70px; /* equal or slightly more than bottom-nav height */
 }
 
 .bottom-nav button {
@@ -733,4 +740,5 @@ borrowForm.addEventListener('submit', async (e) => {
   </script>
 </body>
 </html>
+
 
