@@ -464,27 +464,29 @@ function scanFrame(){
         lastScannedCode = scannedCode;
       }
 
-      overlay.textContent = 'Scanned: ' + scannedCode;
+if(inReturnMode && returnRecord){
+  if(returnRecord.books.includes(scannedCode)) markReturnScanned(scannedCode);
+  else showToast('This item does not belong to ' + returnRecord.borrower.name);
+} else {
+  const found = serverRecords.find(r => Array.isArray(r.books) && r.books.includes(scannedCode));
+  if(found){
+    enterReturnMode(found);
+    markReturnScanned(scannedCode);
+  } else {
+    if(!scannedCodes.includes(scannedCode)){
+      scannedCodes.push(scannedCode);
+      localStorage.setItem('scannedCodes', JSON.stringify(scannedCodes));
+      renderScannedList();
+      showToast('Added. Total scanned: ' + scannedCodes.length);
+    } else {
+      showToast('Already scanned. Total scanned: ' + scannedCodes.length);
+    }
+  }
+}
 
-      if(inReturnMode && returnRecord){
-        if(returnRecord.books.includes(scannedCode)) markReturnScanned(scannedCode);
-        else showToast('This item does not belong to ' + returnRecord.borrower.name);
-      } else {
-        const found = serverRecords.find(r => Array.isArray(r.books) && r.books.includes(scannedCode));
-        if(found){
-          enterReturnMode(found);
-          markReturnScanned(scannedCode);
-        } else {
-          if(!scannedCodes.includes(scannedCode)){
-            scannedCodes.push(scannedCode);
-            localStorage.setItem('scannedCodes', JSON.stringify(scannedCodes));
-            renderScannedList();
-            showToast('Added: ' + scannedCode);
-          } else {
-            showToast('Already scanned for borrow');
-          }
-        }
-      }
+// Always update overlay with total scanned count
+overlay.textContent = `Scanning... (${scannedCodes.length})`;
+
     } else {
       lastScannedCode = null; // reset if no QR detected
     }
