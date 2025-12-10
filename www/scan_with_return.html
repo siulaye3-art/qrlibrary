@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Library Borrower - QR Scanner (Return Mode)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<style>
+  /* Minimal styling (kept similar to your original) */
+  body{font-family:system-ui, sans-serif; background:#f4f7f9; margin:0; color:#222}
+  .app-bar{background:#0a7d32;color:#fff;padding:1rem;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+  .card{background:#fff;border-radius:12px;padding:1rem;margin:1rem;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+  .row{display:flex;gap:.5rem}
+  .btn{padding:.5rem .9rem;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+  .btn.primary{background:#0a7d32;color:#fff}
+  .btn.outline{background:#fff;border:1px solid #0a7d32;color:#0a7d32}
+  .btn.danger{background:#e74c3c;color:#fff}
+  video{width:100%;border-radius:12px;background:#000}
+  .overlay{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);color:#fff;padding:.4rem .6rem;border-radius:6px;font-size:.9rem}
+  .video-wrap{position:relative;}
+  #scan-line{position:absolute;left:0;width:100%;height:2px;background:red;animation:scanAnim 2s infinite alternate;display:none}
+  @keyframes scanAnim{from{top:0%}to{top:100%}}
+  .chip{display:inline-block;padding:.25rem .5rem;background:#eee;border-radius:6px;margin:.15rem}
+  dialog{border:none;border-radius:12px;padding:1rem;width:90%;max-width:520px}
+  .muted{color:#666}
+  #toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#0a7d32;color:#fff;padding:.7rem 1rem;border-radius:8px;opacity:0;transition:opacity .25s}
+  #toast.show{opacity:1}
+  .return-panel{background:#fff;padding:.75rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-top:.6rem}
+  .return-list{display:flex;flex-wrap:wrap;gap:.5rem}
+  .progress-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:.5rem}
+  .progress-dot.done{background:green}
+  .progress-dot.todo{background:#ccc}
+</style>
+</head>
+<body>
+  <header class="app-bar">
+    <h1>Library Borrower - QR Scanner</h1>
+    <div>
+      <button id="btnRecords" class="btn outline"><i class="bi bi-card-list"></i> Records</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2><i class="bi bi-upc-scan"></i> Scanner</h2>
+      <div class="video-wrap">
+        <video id="video" autoplay muted playsinline></video>
+        <div id="overlay" class="overlay">Ready</div>
+        <div id="scan-line"></div>
+        <canvas id="frame" style="display:none"></canvas>
+      </div>
+
+      <div class="row" style="margin-top:.6rem">
+        <button id="btnStart" class="btn primary"><i class="bi bi-camera-video"></i> Start Camera</button>
+        <button id="btnStop" class="btn outline" disabled><i class="bi bi-stop-circle"></i> Stop</button>
+        <button id="btnTorch" class="btn outline" disabled><i class="bi bi-lightbulb"></i> Torch</button>
+        <button id="btnDone" class="btn outline" disabled><i class="bi bi-check2-all"></i> Done</button>
+      </div>
+
+      <div style="margin-top:.75rem">
+        <strong>Scanned books (for borrow):</strong>
+        <div id="scannedList" style="margin-top:.4rem"></div>
+      </div>
+
+      <div id="returnModePanel" class="return-panel" style="display:none">
+        <div><strong>Return Mode</strong> — Borrower: <span id="returnBorrowerName"></span> (<span id="returnBorrowerId"></span>)</div>
+        <div class="muted small" id="returnBorrowerInfo" style="margin-top:.25rem"></div>
+        <div style="margin-top:.5rem"><strong>Items to scan:</strong></div>
+        <div id="requiredList" class="return-list" style="margin-top:.4rem"></div>
+        <div style="margin-top:.6rem">
+          <button id="btnCancelReturn" class="btn outline">Cancel Return</button>
+          <button id="btnConfirmReturn" class="btn primary" disabled>Confirm Return</button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Borrow dialog -->
+  <dialog id="dlgBorrow">
+    <form id="borrowForm">
+      <h3>Borrower Details</h3>
+      <div><label>Name</label><input id="bName" required style="width:100%;padding:.4rem;margin:.25rem 0"></div>
+      <div style="display:flex;gap:.4rem">
+        <input id="bId" placeholder="ID Number" required style="flex:1;padding:.4rem">
+        <input id="bPhone" placeholder="Phone" style="flex:1;padding:.4rem">
+      </div>
+      <div style="display:flex;gap:.4rem;margin-top:.2rem">
+        <input id="bEmail" placeholder="Email" required style="flex:1;padding:.4rem">
+        <input id="bCourse" placeholder="Course" style="flex:1;padding:.4rem">
+      </div>
+      <div style="display:flex;gap:.4rem;margin-top:.2rem">
+        <input id="bYear" placeholder="Year" style="flex:1;padding:.4rem">
+        <input id="bDept" placeholder="Department" style="flex:1;padding:.4rem">
+      </div>
+
+      <div style="margin-top:.5rem"><strong>Books to borrow:</strong>
+        <div id="dlgScannedList" style="margin-top:.4rem"></div>
+      </div>
+
+      <menu style="margin-top:.6rem">
+        <button id="btnCancelBorrow" type="button" class="btn outline">Cancel</button>
+        <button id="btnConfirmBorrow" type="submit" class="btn primary">Confirm Borrow</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <!-- Records -->
+  <dialog id="dlgRecords">
+    <h3>Borrower Records</h3>
+    <input id="searchRecords" placeholder="Search by name, id or book..." style="width:100%;padding:.4rem;margin:.4rem 0">
+    <div id="recordsContainer" style="max-height:320px;overflow:auto">
+      <div id="emptyState" class="muted">Loading...</div>
+      <ul id="recordsList" style="list-style:none;padding:0"></ul>
+    </div>
+    <menu style="margin-top:.6rem">
+      <button id="btnCloseRecords" class="btn outline">Close</button>
+    </menu>
+  </dialog>
+
+  <div id="toast">toast</div>
+  <audio id="beepSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+  <!-- jsQR -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+
+  <!-- The JavaScript logic in the prior message is intended to work with the PHP endpoints above.
+       Use the exact same JS code from the earlier "complete HTML + JS" I provided. -->
+
+        <script>
+  (function(){
+    // --- Config: API endpoints you gave ---
+    const ENDPOINTS = {
+      save: 'save.php',
+      get: 'get_record.php',
+      itemReturn: 'return.php',   // optional per-item
+      deleteBorrower: 'delete.php'
+    };
+
+    // DOM
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('frame');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const btnTorch = document.getElementById('btnTorch');
+    const btnDone = document.getElementById('btnDone');
+    const scannedList = document.getElementById('scannedList');
+    const dlgBorrow = document.getElementById('dlgBorrow');
+    const borrowForm = document.getElementById('borrowForm');
+    const dlgScannedList = document.getElementById('dlgScannedList');
+    const btnCancelBorrow = document.getElementById('btnCancelBorrow');
+
+    const dlgRecords = document.getElementById('dlgRecords');
+    const btnRecords = document.getElementById('btnRecords');
+    const btnCloseRecords = document.getElementById('btnCloseRecords');
+    const recordsList = document.getElementById('recordsList');
+    const searchRecords = document.getElementById('searchRecords');
+    const emptyState = document.getElementById('emptyState');
+
+    const returnPanel = document.getElementById('returnModePanel');
+    const returnBorrowerName = document.getElementById('returnBorrowerName');
+    const returnBorrowerId = document.getElementById('returnBorrowerId');
+    const returnBorrowerInfo = document.getElementById('returnBorrowerInfo');
+    const requiredList = document.getElementById('requiredList');
+    const btnCancelReturn = document.getElementById('btnCancelReturn');
+    const btnConfirmReturn = document.getElementById('btnConfirmReturn');
+
+    const toastEl = document.getElementById('toast');
+    const beep = document.getElementById('beepSound');
+
+    // State
+    let stream = null;
+    let scanning = false;
+    let currentTrack = null;
+    let torchOn = false;
+
+    // Server-backed records (primary source). Format expected from get_record.php:
+    // [ { borrower: { name, id, email, phone, course, year, department }, books: ["code1","code2"], timestamp: 123, dueDate: 123 }, ... ]
+    let serverRecords = []; // authoritative list from server
+    // Local scanned list for new borrow
+    let scannedCodes = JSON.parse(localStorage.getItem('scannedCodes')|| '[]');
+
+    // Return mode state
+    let inReturnMode = false;
+    let returnRecord = null;      // server record user is returning
+    let returnScanned = new Set();// codes scanned for this return
+
+    // UTIL: toast
+    function showToast(msg, ms=2000){
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(()=>toastEl.classList.remove('show'), ms);
+    }
+
+    // UTIL: fetch JSON with error handling
+    async function getJSON(url){
+      try{
+        const res = await fetch(url, { cache:'no-store' });
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        return await res.json();
+      }catch(err){
+        console.warn('getJSON error', err);
+        return null;
+      }
+    }
+    async function postJSON(url, data){
+      try{
+        const res = await fetch(url, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify(data)
+        });
+        return await res.json().catch(()=>({ok:false}));
+      }catch(err){ console.warn('postJSON err', err); return null; }
+    }
+
+    // --- Load records from server (initial) ---
+    async function loadServerRecords(){
+      const data = await getJSON(ENDPOINTS.get);
+      if(Array.isArray(data)){
+        serverRecords = data;
+        saveServerRecordsToLocal(); // save a local copy so offline works
+      } else {
+        // fallback to localStorage copy if server not reachable
+        const local = JSON.parse(localStorage.getItem('serverRecords')||'[]');
+        serverRecords = local;
+      }
+      renderRecordsList(); // update records UI
+    }
+    function saveServerRecordsToLocal(){
+      localStorage.setItem('serverRecords', JSON.stringify(serverRecords));
+    }
+
+    // --- Render scanned list UI ---
+    function renderScannedList(){
+      scannedList.innerHTML = '';
+      scannedCodes.forEach(c=>{
+        const s = document.createElement('span');
+        s.className='chip';
+        s.textContent = c;
+        scannedList.appendChild(s);
+      });
+      btnDone.disabled = scannedCodes.length === 0;
+      // update overlay scanned count
+      overlay.textContent = inReturnMode ? 'Return mode' : `Scanning... (${scannedCodes.length})`;
+    }
+
+    // --- Enter return mode (when scanning a borrowed item) ---
+    function enterReturnMode(record){
+      inReturnMode = true;
+      returnRecord = record;
+      returnScanned = new Set(); // reset
+      // UI
+      returnBorrowerName.textContent = record.borrower.name;
+      returnBorrowerId.textContent = record.borrower.id || '';
+      let info = [];
+      if(record.borrower.course) info.push(record.borrower.course);
+      if(record.borrower.year) info.push(record.borrower.year);
+      returnBorrowerInfo.textContent = info.join(' • ');
+      // render required list
+      requiredList.innerHTML = '';
+      record.books.forEach(code=>{
+        const el = document.createElement('div');
+        el.className = 'chip';
+        el.dataset.code = code;
+        el.innerHTML = `<span class="req-code">${code}</span> <span class="progress-dot todo"></span>`;
+        requiredList.appendChild(el);
+      });
+      btnConfirmReturn.disabled = true;
+      returnPanel.style.display = 'block';
+      overlay.textContent = `Return Mode: ${record.borrower.name}`;
+      showToast(`Return mode: ${record.borrower.name}`, 1600);
+    }
+
+    function exitReturnMode(){
+      inReturnMode = false;
+      returnRecord = null;
+      returnScanned = new Set();
+      requiredList.innerHTML = '';
+      returnPanel.style.display = 'none';
+      overlay.textContent = `Scanning... (${scannedCodes.length})`;
+    }
+
+    // mark item as scanned in return UI
+    function markReturnScanned(code){
+      if(!returnRecord) return;
+      if(!returnRecord.books.includes(code)) return;
+      if(returnScanned.has(code)) return;
+      returnScanned.add(code);
+      // update chip
+      const chip = Array.from(requiredList.querySelectorAll('.chip'))
+        .find(n => n.dataset.code === code);
+      if(chip){
+        const dot = chip.querySelector('.progress-dot');
+        if(dot){ dot.classList.remove('todo'); dot.classList.add('done'); }
+      }
+      // enable confirm if all scanned
+      if(returnScanned.size === returnRecord.books.length){
+        btnConfirmReturn.disabled = false;
+        showToast('All items scanned — you can Confirm Return');
+      } else {
+        const remaining = returnRecord.books.length - returnScanned.size;
+        showToast(`${remaining} item(s) left to scan`, 900);
+      }
+    }
+
+    // --- Confirm return: call return.php for each and delete.php for borrower ---
+    async function confirmReturn(){
+      if(!returnRecord) return;
+      const borrowerId = returnRecord.borrower.id || returnRecord.id || null;
+      // call return.php for each item (best-effort)
+      for(const code of Array.from(returnScanned)){
+        try{
+          await postJSON(ENDPOINTS.itemReturn, { code });
+        }catch(e){ /* ignore errors, best-effort */ }
+      }
+      // delete borrower record
+      try{
+        await postJSON(ENDPOINTS.deleteBorrower, { borrowerId });
+      }catch(e){ /* ignore */}
+      // Remove record from local serverRecords as well
+      serverRecords = serverRecords.filter(r => {
+        const idA = r.borrower && r.borrower.id ? r.borrower.id : r.id;
+        return String(idA) !== String(borrowerId);
+      });
+      saveServerRecordsToLocal();
+      showToast('Return completed — record removed');
+      exitReturnMode();
+      renderRecordsList();
+    }
+
+    // --- Scan loop using jsQR ---
+    function startScan(){
+      if(scanning) return;
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(s => {
+          stream = s;
+          video.srcObject = stream;
+          video.play();
+          scanning = true;
+          btnStart.disabled = true;
+          btnStop.disabled = false;
+          document.getElementById('scan-line').style.display = 'block';
+          currentTrack = stream.getVideoTracks()[0];
+          const caps = currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
+          btnTorch.disabled = !caps.torch;
+          overlay.textContent = `Scanning... (${scannedCodes.length})`;
+          requestAnimationFrame(scanFrame);
+        }).catch(err => {
+          console.error('camera:', err);
+          overlay.textContent = 'Camera access required';
+          showToast('Allow camera access');
+        });
+    }
+    function stopScan(){
+      if(stream) stream.getTracks().forEach(t=>t.stop());
+      scanning = false;
+      video.srcObject = null;
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+      document.getElementById('scan-line').style.display = 'none';
+      overlay.textContent = 'Stopped';
+    }
+
+    function scanFrame(){
+      if(!scanning) return;
+      if(video.readyState === video.HAVE_ENOUGH_DATA){
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        const idata = ctx.getImageData(0,0,canvas.width,canvas.height);
+        const code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'dontInvert' });
+        if(code && code.data){
+          beep.currentTime = 0;
+          beep.play().catch(()=>{});
+          const scannedCode = String(code.data).trim();
+          overlay.textContent = 'Scanned: ' + scannedCode;
+
+          // If currently in return mode -> accept only items that belong to this borrower
+          if(inReturnMode && returnRecord){
+            if(returnRecord.books.includes(scannedCode)){
+              markReturnScanned(scannedCode);
+            } else {
+              showToast('This item does not belong to ' + returnRecord.borrower.name);
+            }
+          } else {
+            // Not in return mode: check if scanned code belongs to any active borrower
+            const found = serverRecords.find(r => Array.isArray(r.books) && r.books.includes(scannedCode));
+            if(found){
+              // start return mode for this borrower
+              enterReturnMode(found);
+              // mark this scanned item as scanned immediately
+              markReturnScanned(scannedCode);
+            } else {
+              // Normal borrow scanning: add to scannedCodes for new borrow
+              if(!scannedCodes.includes(scannedCode)){
+                scannedCodes.push(scannedCode);
+                localStorage.setItem('scannedCodes', JSON.stringify(scannedCodes));
+                renderScannedList();
+                showToast('Added: ' + scannedCode);
+              } else {
+                showToast('Already scanned for borrow');
+              }
+            }
+          }
+        }
+      }
+      requestAnimationFrame(scanFrame);
+    }
+
+    // --- Borrow submit (save.php) ---
+    borrowForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      if(scannedCodes.length === 0){
+        alert('No books scanned to borrow');
+        return;
+      }
+      const record = {
+        borrower: {
+          name: document.getElementById('bName').value.trim(),
+          id: document.getElementById('bId').value.trim(),
+          email: document.getElementById('bEmail').value.trim(),
+          phone: document.getElementById('bPhone').value.trim(),
+          course: document.getElementById('bCourse').value.trim(),
+          year: document.getElementById('bYear').value.trim(),
+          department: document.getElementById('bDept').value.trim()
+        },
+        books: scannedCodes.slice(),
+        timestamp: Date.now(),
+        dueDate: Date.now() + 30*24*60*60*1000
+      };
+
+      // send to server
+      const res = await postJSON(ENDPOINTS.save, record);
+      if(res && (res.status === 'success' || res.ok === true)){
+        showToast('Borrow saved to server');
+      } else {
+        // fallback: save to local copy
+        serverRecords.push(record);
+        saveServerRecordsToLocal();
+        showToast('Server unavailable — saved locally');
+      }
+
+      // clear scannedCodes
+      scannedCodes = [];
+      localStorage.setItem('scannedCodes', JSON.stringify(scannedCodes));
+      renderScannedList();
+      dlgBorrow.close();
+      renderRecordsList();
+    });
+
+    // Cancel borrow
+    btnCancelBorrow.addEventListener('click', ()=> dlgBorrow.close());
+
+    // Records dialog render
+    function renderRecordsList(filter=''){
+      recordsList.innerHTML = '';
+      const q = (filter||'').toLowerCase();
+      const list = serverRecords.filter(r=>{
+        const name = (r.borrower && r.borrower.name || '').toLowerCase();
+        const id = (r.borrower && r.borrower.id || '').toLowerCase();
+        const books = (Array.isArray(r.books)?r.books.join(' '):'').toLowerCase();
+        return name.includes(q) || id.includes(q) || books.includes(q);
+      });
+
+      if(list.length === 0){
+        emptyState.style.display = 'block';
+        emptyState.textContent = 'No borrowed items';
+        return;
+      }
+      emptyState.style.display = 'none';
+      list.forEach(r=>{
+        const li = document.createElement('li');
+        li.style.padding = '.5rem';
+        li.style.borderBottom = '1px solid #eee';
+        const name = r.borrower ? r.borrower.name : (r.name || 'Unknown');
+        const id = r.borrower ? r.borrower.id : (r.id || '');
+        const books = Array.isArray(r.books) ? r.books.join(', ') : r.books;
+        const borrowedAt = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
+        li.innerHTML = `<div><strong>${name}</strong> (${id}) <div class="small">Books: ${books}</div><div class="small">Borrowed: ${borrowedAt}</div></div>`;
+        // quick Return button (server-side)
+        const btn = document.createElement('button');
+        btn.className = 'btn outline';
+        btn.textContent = 'Start Return';
+        btn.style.marginLeft = '8px';
+        btn.onclick = ()=>{
+          enterReturnMode(r);
+        };
+        li.appendChild(btn);
+        recordsList.appendChild(li);
+      });
+    }
+
+    // records dialog events
+    btnRecords.addEventListener('click', ()=> { renderRecordsList(); dlgRecords.showModal(); });
+    btnCloseRecords.addEventListener('click', ()=> dlgRecords.close());
+    searchRecords.addEventListener('input', (e)=> renderRecordsList(e.target.value));
+
+    // return buttons
+    btnCancelReturn.addEventListener('click', ()=> {
+      exitReturnMode();
+    });
+    btnConfirmReturn.addEventListener('click', async ()=> {
+      btnConfirmReturn.disabled = true;
+      await confirmReturn();
+    });
+
+    // buttons: start/stop/torch/done
+    btnStart.addEventListener('click', startScan);
+    btnStop.addEventListener('click', stopScan);
+    btnTorch.addEventListener('click', async ()=>{
+      if(!currentTrack) return;
+      try{
+        torchOn = !torchOn;
+        await currentTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
+        btnTorch.textContent = torchOn ? 'Torch ON' : 'Torch';
+      }catch(e){ showToast('Torch not supported') }
+    });
+    btnDone.addEventListener('click', ()=> {
+      // open borrow dialog with scanned list
+      dlgScannedList.innerHTML = '';
+      scannedCodes.forEach(c=>{
+        const d = document.createElement('div'); d.className='chip'; d.textContent = c;
+        dlgScannedList.appendChild(d);
+      });
+      dlgBorrow.showModal();
+    });
+
+    // initialize
+    (async function init(){
+      // load records from server
+      await loadServerRecords();
+      // render scanned list saved in localStorage
+      renderScannedList();
+      // small UI init text
+      overlay.textContent = 'Ready';
+    })();
+
+    // expose for debugging
+    window._scannerState = ()=> ({
+      serverRecords, scannedCodes, inReturnMode, returnRecord, returnScanned: Array.from(returnScanned)
+    });
+
+  })();
+  </script>
+</body>
+</html>
